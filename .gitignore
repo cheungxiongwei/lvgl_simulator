@@ -1,0 +1,4 @@
+.qtcreator
+CMakeLists.txt.*
+build
+LVGLQML/.qmlls.ini
