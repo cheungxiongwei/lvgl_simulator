@@ -2,3 +2,6 @@
 CMakeLists.txt.*
 build
 LVGLQML/.qmlls.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
