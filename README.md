@@ -65,7 +65,7 @@ This project depends on the following submodules:
 ### 1️⃣ Clone with Submodules
 
 ```bash
-git clone --recursive https://github.com/yourname/lvgl_simulator.git
+git clone --recursive https://github.com/cheungxiongwei/lvgl_simulator.git
 ```
 
 Or if already cloned:

@@ -68,7 +68,7 @@ lvgl_simulator/
 ### 1️⃣ 克隆仓库（含子模块）
 
 ```bash
-git clone --recursive https://github.com/yourname/lvgl_simulator.git
+git clone --recursive https://github.com/cheungxiongwei/lvgl_simulator.git
 ```
 
 如果已克隆：

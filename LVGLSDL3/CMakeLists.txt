@@ -1,6 +1,8 @@
 add_executable(LVGLSDL3
     main.cpp
     main.h
+        LVGraphics/LVGraphics.cpp
+        LVGraphics/LVGraphics.h
 )
 
 set_target_properties(LVGLSDL3 PROPERTIES
@@ -9,7 +11,7 @@ set_target_properties(LVGLSDL3 PROPERTIES
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE
     # or add_executable(LVGLSDL3 WIN32 main.cpp)
-    WIN32_EXECUTABLE TRUE
+    # WIN32_EXECUTABLE TRUE
 )
 
 target_link_options(LVGLSDL3
