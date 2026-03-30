@@ -13,7 +13,6 @@ public:
         m_logical_width(hor_res), m_logical_height(ver_res), m_dpi_scale(1.0f),
         m_pixel_width(static_cast<int>(std::lround(m_logical_width * m_dpi_scale))), m_pixel_height(static_cast<int>(std::lround(m_logical_height * m_dpi_scale)))
     {
-
         // Initialize SDL
         if (!SDL_Init(SDL_INIT_VIDEO))
         {
@@ -21,12 +20,23 @@ public:
             return;
         }
 
+        SDL_DisplayID instance_id = SDL_GetPrimaryDisplay();
+        m_dpi_scale = SDL_GetDisplayContentScale(instance_id);
+        if(m_dpi_scale < 1.0){
+            m_dpi_scale = 1.0;
+        }
+
+        m_pixel_width = static_cast<int>(std::lround(m_logical_width * m_dpi_scale));
+        m_pixel_height = static_cast<int>(std::lround(m_logical_height * m_dpi_scale));
+
         // Create window
         SDL_WindowFlags flags = 0;
+        flags |= SDL_WINDOW_OPENGL;
         flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
         flags |= SDL_WINDOW_BORDERLESS; // 无边框
         flags |= SDL_WINDOW_ALWAYS_ON_TOP; // 置顶
-        m_window = SDL_CreateWindow("LVGL with SDL3", m_logical_width, m_logical_height, flags);
+        flags |= SDL_WINDOW_RESIZABLE;
+        m_window = SDL_CreateWindow("LVGL with SDL3", m_pixel_width, m_pixel_height, flags);
         if (!m_window)
         {
             std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
@@ -34,8 +44,14 @@ public:
             return;
         }
 
-        float scale = SDL_GetWindowDisplayScale(m_window);
-        std::cout << "scale: " << scale << std::endl;
+        if (!SDL_SetWindowSize(window, w, h))
+        {
+            std::cerr << "SDL_SetWindowSize Error: " << SDL_GetError() << std::endl;
+            SDL_DestroyWindow(m_window);
+            SDL_Quit();
+            return;
+        }
+        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
         // Create renderer
         m_renderer = SDL_CreateRenderer(m_window, nullptr);
@@ -182,16 +198,16 @@ private:
             break;
 
         case SDL_EVENT_MOUSE_MOTION:
-            m_mouse_point.x = event.motion.x;
-            m_mouse_point.y = event.motion.y;
+            m_mouse_point.x = static_cast<int>(std::lround(event.motion.x / m_dpi_scale));
+            m_mouse_point.y = static_cast<int>(std::lround(event.motion.y / m_dpi_scale));
             break;
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
             if (event.button.button == SDL_BUTTON_LEFT)
             {
                 m_mouse_state = LV_INDEV_STATE_PRESSED;
-                m_mouse_point.x = event.button.x;
-                m_mouse_point.y = event.button.y;
+                m_mouse_point.x = static_cast<int>(std::lround(event.button.x / m_dpi_scale));
+                m_mouse_point.y = static_cast<int>(std::lround(event.button.y / m_dpi_scale));
             }
             break;
 
@@ -199,8 +215,8 @@ private:
             if (event.button.button == SDL_BUTTON_LEFT)
             {
                 m_mouse_state = LV_INDEV_STATE_RELEASED;
-                m_mouse_point.x = event.button.x;
-                m_mouse_point.y = event.button.y;
+                m_mouse_point.x = static_cast<int>(std::lround(event.button.x / m_dpi_scale));
+                m_mouse_point.y = static_cast<int>(std::lround(event.button.y / m_dpi_scale));
             }
             break;
 
@@ -254,7 +270,6 @@ private:
 
     int m_pixel_width;
     int m_pixel_height;
-
 
     // System time tracking
     inline static std::chrono::steady_clock::time_point m_system_start = std::chrono::steady_clock::now();
