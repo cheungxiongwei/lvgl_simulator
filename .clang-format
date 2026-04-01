@@ -1,0 +1,92 @@
+BasedOnStyle: Chromium
+IndentWidth: 4
+ColumnLimit: 120
+
+AccessModifierOffset: -4
+
+SortIncludes: false
+
+AlignAfterOpenBracket: Align
+AlignArrayOfStructures: Right
+AlignConsecutiveMacros: true
+AlignTrailingComments: true
+
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: false
+
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: false
+
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+
+BinPackArguments: false
+BinPackLongBracedList: true
+BinPackParameters: OnePerLine
+
+BitFieldColonSpacing: Both
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true # 在 case 标签后加换行（推荐 true）
+  AfterClass: true # class 定义的花括号换行
+  AfterControlStatement: Never # if/for/while 等控制语句后的换行
+  AfterEnum: false # enum 定义花括号换行
+  AfterFunction: false # 函数定义花括号换行
+  AfterNamespace: true # namespace 定义花括号换行
+  AfterObjCDeclaration: false # ObjC 定义花括号换行（用于 ObjC 项目）
+  AfterStruct: false # struct 定义花括号换行
+  AfterUnion: true # union 定义花括号换行
+  AfterExternBlock: true # extern "C" 块换行
+  BeforeCatch: true # catch 前换行
+  BeforeElse: false # else 前换行
+  BeforeLambdaBody: true # lambda 表达式体前换行
+  BeforeWhile: true # do-while 中 while 前换行
+  IndentBraces: false # 是否缩进 `{}` 本身
+  SplitEmptyFunction: false # 是否拆分空函数体 `{}` 成两行
+  SplitEmptyRecord: false # 是否拆分空 struct/class/union
+  SplitEmptyNamespace: false # 是否拆分空 namespace
+
+AllowShortEnumsOnASingleLine: false
+
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: Never
+
+IndentAccessModifiers: false
+IndentCaseBlocks: false
+IndentCaseLabels: true
+IndentExportBlock: false
+IndentExternBlock: Indent
+IndentGotoLabels: true
+IndentPPDirectives: BeforeHash
+IndentRequiresClause: false
+#IncludeBlocks: Regroup
+
+InsertBraces: false
+InsertNewlineAtEOF: true
+
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: false
+  AtStartOfFile: false
+
+LambdaBodyIndentation: Signature
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: All
+PackConstructorInitializers: NextLine
+
+PointerAlignment: Left
+QualifierAlignment: Custom
+QualifierOrder: [inline, static, type, const, constexpr]
+ReferenceAlignment: Pointer
+ReflowComments: IndentOnly
+RemoveEmptyLinesInUnwrappedLines: true
+RequiresClausePosition: WithFollowing
+RequiresExpressionIndentation: OuterScope
+SeparateDefinitionBlocks: Always
+
+SkipMacroDefinitionBody: true
