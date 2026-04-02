@@ -1,15 +1,21 @@
 #include "LVGraphics.h"
+#include <cmath>
+
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
 
 enum anchor_mask_t {
-    ANCHOR_LEFT         = 1 << 0,                                                   // drag left edge
-    ANCHOR_RIGHT        = 1 << 1,                                                   // drag right edge
-    ANCHOR_TOP          = 1 << 2,                                                   // drag top edge
-    ANCHOR_BOTTOM       = 1 << 3,                                                   // drag bottom edge
-    ANCHOR_TOP_LEFT     = ANCHOR_TOP | ANCHOR_LEFT,                                 // drag top&left edge
-    ANCHOR_TOP_RIGHT    = ANCHOR_TOP | ANCHOR_RIGHT,                                // drag top&right edge
-    ANCHOR_BOTTOM_LEFT  = ANCHOR_BOTTOM | ANCHOR_LEFT,                              // drag bottom&left edge
-    ANCHOR_BOTTOM_RIGHT = ANCHOR_BOTTOM | ANCHOR_RIGHT,                             // drag bottom&right edge
-    ANCHOR_CENTER       = ANCHOR_TOP | ANCHOR_BOTTOM | ANCHOR_LEFT | ANCHOR_RIGHT,  // drag move
+    ANCHOR_LEFT         = 1 << 0,
+    ANCHOR_RIGHT        = 1 << 1,
+    ANCHOR_TOP          = 1 << 2,
+    ANCHOR_BOTTOM       = 1 << 3,
+    ANCHOR_TOP_LEFT     = ANCHOR_TOP | ANCHOR_LEFT,
+    ANCHOR_TOP_RIGHT    = ANCHOR_TOP | ANCHOR_RIGHT,
+    ANCHOR_BOTTOM_LEFT  = ANCHOR_BOTTOM | ANCHOR_LEFT,
+    ANCHOR_BOTTOM_RIGHT = ANCHOR_BOTTOM | ANCHOR_RIGHT,
+    ANCHOR_CENTER       = ANCHOR_TOP | ANCHOR_BOTTOM | ANCHOR_LEFT | ANCHOR_RIGHT,
+    ANCHOR_ROTATE       = 1 << 4,
 };
 
 lv_area_t solve_rect(lv_area_t area, int anchor_mask, int dx, int dy) {
@@ -21,166 +27,93 @@ lv_area_t solve_rect(lv_area_t area, int anchor_mask, int dx, int dy) {
         return area;
     }
 
-    // --- 水平方向 ---
-    if (anchor_mask & ANCHOR_LEFT) {
+    if (anchor_mask & ANCHOR_LEFT)
         area.x1 += dx;
-    }
-
-    if (anchor_mask & ANCHOR_RIGHT) {
+    if (anchor_mask & ANCHOR_RIGHT)
         area.x2 += dx;
-    }
-
-    // --- 垂直方向 ---
-    if (anchor_mask & ANCHOR_TOP) {
+    if (anchor_mask & ANCHOR_TOP)
         area.y1 += dy;
-    }
-
-    if (anchor_mask & ANCHOR_BOTTOM) {
+    if (anchor_mask & ANCHOR_BOTTOM)
         area.y2 += dy;
-    }
 
-    // --- 约束：最小尺寸 ---
     if (area.x2 - area.x1 < 1) {
-        if (anchor_mask & ANCHOR_LEFT) {
+        if (anchor_mask & ANCHOR_LEFT)
             area.x1 = area.x2 - 1;
-        } else {
+        else
             area.x2 = area.x1 + 1;
-        }
     }
-
     if (area.y2 - area.y1 < 1) {
-        if (anchor_mask & ANCHOR_TOP) {
+        if (anchor_mask & ANCHOR_TOP)
             area.y1 = area.y2 - 1;
-        } else {
+        else
             area.y2 = area.y1 + 1;
-        }
     }
     return area;
 }
 
 struct Transform {
-    // translate
     float tx = 0.f;
     float ty = 0.f;
-    // scale
     float sx = 1.f;
     float sy = 1.f;
-    // rotate
-    float deg = 0.f;
+    // --- 旋转（角度制，顺时针为正，与 LVGL 一致）---
+    float deg     = 0.f;
+    float pivot_x = 0.5f;
+    float pivot_y = 0.5f;
 
-    void apply(lv_obj_t* obj) {
+    lv_matrix_t build(lv_obj_t const* obj) const {
+        float w  = static_cast<float>(lv_obj_get_width(const_cast<lv_obj_t*>(obj)));
+        float h  = static_cast<float>(lv_obj_get_height(const_cast<lv_obj_t*>(obj)));
+
+        float cx = w * pivot_x;
+        float cy = h * pivot_y;
+
+        lv_matrix_t m;
+        lv_matrix_identity(&m);
+        lv_matrix_translate(&m, tx, ty);
+        lv_matrix_translate(&m, cx, cy);
+        lv_matrix_rotate(&m, deg);
+        lv_matrix_scale(&m, sx, sy);
+        lv_matrix_translate(&m, -cx, -cy);
+
+        return m;
+    }
+
+    Transform& apply(lv_obj_t* obj) {
         if (obj == nullptr)
-            return;
+            return *this;
+        lv_matrix_t m = build(obj);
+        lv_obj_set_transform(obj, &m);
+        return *this;
+    }
 
-        float cx = static_cast<float>(lv_obj_get_width(obj) / 2);
-        float cy = static_cast<float>(lv_obj_get_height(obj) / 2);
+    Transform& reset() {
+        tx = ty = 0.f;
+        sx = sy = 1.f;
+        deg     = 0.f;
+        pivot_x = pivot_y = 0.5f;
+        return *this;
+    }
 
-        // M = T * S * R
-        lv_matrix_t matrix;
-        lv_matrix_identity(&matrix);
-        lv_matrix_translate(&matrix, cx, cy);
-        lv_matrix_rotate(&matrix, deg);
-        lv_matrix_scale(&matrix, sx, sy);
-        lv_matrix_translate(&matrix, -cx, -cy);
-        lv_matrix_translate(&matrix, tx, ty);
-        lv_obj_set_transform(obj, &matrix);
+    static Transform from_translate(float x, float y) {
+        Transform t;
+        t.tx = x;
+        t.ty = y;
+        return t;
+    }
+
+    static Transform from_rotate(float deg) {
+        Transform t;
+        t.deg = deg;
+        return t;
+    }
+
+    static Transform from_scale(float s) {
+        Transform t;
+        t.sx = t.sy = s;
+        return t;
     }
 };
-
-struct OrientedBoundingBox {
-    lv_point_t center;
-    lv_point_t extents;
-    lv_matrix_t matrix;
-    bool dirty = false;
-
-    OrientedBoundingBox(lv_area_t area, Transform transform) {
-        center.x  = (area.x1 + area.x2) / 2;
-        center.y  = (area.y1 + area.y2) / 2;
-        extents.x = (area.x2 - area.x1) / 2;
-        extents.y = (area.y2 - area.y1) / 2;
-
-        lv_matrix_identity(&matrix);
-        lv_matrix_translate(&matrix, center.x, center.y);
-        lv_matrix_rotate(&matrix, transform.deg);
-        lv_matrix_scale(&matrix, transform.sx, transform.sy);
-        lv_matrix_translate(&matrix, -center.x, -center.y);
-        lv_matrix_translate(&matrix, transform.tx, transform.ty);
-    }
-
-    lv_point_t tl() {
-        lv_point_t point{center.x - extents.x, center.x - extents.y};
-        lv_point_precise_t pointf = lv_point_to_precise(&point);
-        pointf                    = lv_matrix_transform_precise_point(&matrix, &pointf);
-        point                     = lv_point_from_precise(&pointf);
-        return point;
-    }
-
-    lv_point_t tr() {
-        lv_point_t point{center.x + extents.x, center.x - extents.y};
-        lv_point_precise_t pointf = lv_point_to_precise(&point);
-        pointf                    = lv_matrix_transform_precise_point(&matrix, &pointf);
-        point                     = lv_point_from_precise(&pointf);
-        return point;
-    }
-
-    lv_point_t bl() {
-        lv_point_t point{center.x - extents.x, center.x + extents.y};
-        lv_point_precise_t pointf = lv_point_to_precise(&point);
-        pointf                    = lv_matrix_transform_precise_point(&matrix, &pointf);
-        point                     = lv_point_from_precise(&pointf);
-        return point;
-    }
-
-    lv_point_t br() {
-        lv_point_t point{center.x + extents.x, center.x + extents.y};
-        lv_point_precise_t pointf = lv_point_to_precise(&point);
-        pointf                    = lv_matrix_transform_precise_point(&matrix, &pointf);
-        point                     = lv_point_from_precise(&pointf);
-        return point;
-    }
-
-    lv_area_t aabb() {
-        lv_point_t p[4] = {tl(), tr(), bl(), br()};
-
-        int32_t x1 = p[0].x, x2 = p[0].x;
-        int32_t y1 = p[0].y, y2 = p[0].y;
-
-        for (int i = 1; i < 4; i++) {
-            if (p[i].x < x1)
-                x1 = p[i].x;
-            if (p[i].x > x2)
-                x2 = p[i].x;
-            if (p[i].y < y1)
-                y1 = p[i].y;
-            if (p[i].y > y2)
-                y2 = p[i].y;
-        }
-
-        return {x1, y1, x2, y2};
-    }
-
-    static lv_area_t new_aabb(lv_point_t tl, lv_point_t tr, lv_point_t bl, lv_point_t br) {
-        lv_point_t p[4] = {tl, tr, bl, br};
-
-        int32_t x1 = p[0].x, x2 = p[0].x;
-        int32_t y1 = p[0].y, y2 = p[0].y;
-
-        for (int i = 1; i < 4; i++) {
-            if (p[i].x < x1)
-                x1 = p[i].x;
-            if (p[i].x > x2)
-                x2 = p[i].x;
-            if (p[i].y < y1)
-                y1 = p[i].y;
-            if (p[i].y > y2)
-                y2 = p[i].y;
-        }
-
-        return {x1, y1, x2, y2};
-    }
-};
-
-using OBB = OrientedBoundingBox;
 
 class LVGraphicsItem
 {
@@ -189,12 +122,21 @@ public:
         m_transform.deg += deg;
         while (m_transform.deg >= 360)
             m_transform.deg -= 360;
+        while (m_transform.deg < 0)
+            m_transform.deg += 360;
+        m_transform.apply(m_obj);
+    }
 
+    void set_rotation(float deg) {
+        m_transform.deg = deg;
+        while (m_transform.deg >= 360)
+            m_transform.deg -= 360;
+        while (m_transform.deg < 0)
+            m_transform.deg += 360;
         m_transform.apply(m_obj);
     }
 
     LVGraphicsItem() = default;
-
     virtual ~LVGraphicsItem() {};
 
     lv_obj_t* to_object() { return m_obj; }
@@ -233,7 +175,6 @@ public:
         lv_obj_set_flex_flow(m_layout, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_gap(m_layout, 6, 0);
         lv_obj_set_flex_align(m_layout, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_SPACE_EVENLY);
-
         lv_obj_set_style_bg_color(m_layout, lv_color_make(232, 230, 230), 0);
         lv_obj_set_style_opa(m_layout, LV_OPA_COVER, 0);
 
@@ -291,9 +232,7 @@ public:
         field.input  = input;
 
         lv_obj_add_event_cb(field.input, LVGraphicsPropertyPanel::event, LV_EVENT_READY, this);
-
         m_properties[name] = field;
-
         return field;
     }
 
@@ -303,7 +242,6 @@ public:
             return;
         }
         set_visible(true);
-
         m_ref_item = item;
         reset_properties();
     }
@@ -311,25 +249,17 @@ public:
     void reset_properties() {
         if (!m_ref_item)
             return;
-
         lv_obj_t* object = m_ref_item->to_object();
-        int x            = lv_obj_get_x(object);
-        int y            = lv_obj_get_y(object);
-        int width        = lv_obj_get_width(object);
-        int height       = lv_obj_get_height(object);
-
-        m_properties["x"].set_value(x);
-        m_properties["y"].set_value(y);
-        m_properties["width"].set_value(width);
-        m_properties["height"].set_value(height);
-
+        m_properties["x"].set_value(lv_obj_get_x(object));
+        m_properties["y"].set_value(lv_obj_get_y(object));
+        m_properties["width"].set_value(lv_obj_get_width(object));
+        m_properties["height"].set_value(lv_obj_get_height(object));
         update_transform_ui();
     }
 
     void update_transform_ui() {
         if (!m_ref_item)
             return;
-
         Transform& transform = m_ref_item->transform();
         m_properties["tx"].set_value(transform.tx);
         m_properties["ty"].set_value(transform.ty);
@@ -341,7 +271,6 @@ public:
     void apply_transform() {
         if (!m_ref_item)
             return;
-
         Transform& transform = m_ref_item->transform();
         transform.tx         = strtof(lv_textarea_get_text(m_properties["tx"].input), nullptr);
         transform.ty         = strtof(lv_textarea_get_text(m_properties["ty"].input), nullptr);
@@ -349,7 +278,6 @@ public:
         transform.sy         = strtof(lv_textarea_get_text(m_properties["sy"].input), nullptr);
         transform.deg        = strtof(lv_textarea_get_text(m_properties["deg"].input), nullptr);
         transform.apply(m_ref_item->to_object());
-
         update_transform_ui();
     }
 
@@ -360,27 +288,23 @@ public:
         if (!self || !self->m_ref_item)
             return;
 
-        std::println("up\n");
-
         lv_obj_t* ta     = lv_event_get_current_target_obj(e);
         std::string text = lv_textarea_get_text(ta);
-
         lv_obj_t* object = self->m_ref_item->to_object();
+
         for (auto& [key, field] : self->m_properties) {
             if (field.input != ta)
                 continue;
-
-            if (key.compare("x") == 0) {
+            if (key.compare("x") == 0)
                 lv_obj_set_x(object, std::stoi(text));
-            } else if (key.compare("y") == 0) {
+            else if (key.compare("y") == 0)
                 lv_obj_set_y(object, std::stoi(text));
-            } else if (key.compare("width") == 0) {
+            else if (key.compare("width") == 0)
                 lv_obj_set_width(object, std::stoi(text));
-            } else if (key.compare("height") == 0) {
+            else if (key.compare("height") == 0)
                 lv_obj_set_height(object, std::stoi(text));
-            } else {
+            else
                 self->apply_transform();
-            }
             break;
         }
     };
@@ -401,7 +325,6 @@ public:
         lv_obj_set_flag(m_obj, LV_OBJ_FLAG_EVENT_BUBBLE, true);
         lv_obj_set_style_pad_all(m_obj, 0, LV_PART_MAIN);
         lv_obj_set_style_margin_all(m_obj, 0, LV_PART_MAIN);
-
         lv_obj_set_style_border_color(m_obj, lv_palette_main(LV_PALETTE_GREY), LV_PART_MAIN);
         lv_obj_set_style_border_width(m_obj, 1, LV_PART_MAIN);
     }
@@ -458,12 +381,6 @@ public:
         m_handles["bm"]  = create_handle(&m_bm, LV_ALIGN_BOTTOM_MID, 0, k_radius);
         m_handles["lm"]  = create_handle(&m_lm, LV_ALIGN_LEFT_MID, -k_radius, 0);
         m_handles["rm"]  = create_handle(&m_rm, LV_ALIGN_RIGHT_MID, k_radius, 0);
-
-        lv_obj_add_event_cb(
-            m_handles["rot"].obj,
-            [](lv_event_t* e) { ((LVGraphicsInteractGizmos*)lv_event_get_user_data(e))->on_rotate(e); },
-            LV_EVENT_CLICKED,
-            this);
     }
 
     Handle create_handle(lv_obj_t** handle, lv_align_t align, int32_t x_offset, int32_t y_offset) {
@@ -506,7 +423,6 @@ public:
         lv_obj_update_layout(m_bbox);
 
         m_item->m_transform.apply(m_bbox);
-
         m_current_target = m_bbox;
     }
 
@@ -517,30 +433,58 @@ public:
     void mouse_press(lv_point_t point) {
         if (m_item == nullptr)
             return;
+        m_press_point    = point;
+        m_aabb           = get_aabb(m_bbox);
+        m_is_draging     = true;
+        m_drag_start_deg = m_item->m_transform.deg;
 
-        m_press_point = point;
-        m_aabb        = get_aabb(m_bbox);
-        m_is_draging  = true;
-        std::println("mouse_press: ({}, {})", point.x, point.y);
+        // compute bbox center in screen coords for rotation
+        int bx          = lv_obj_get_x(m_bbox);
+        int by          = lv_obj_get_y(m_bbox);
+        int bw          = lv_obj_get_width(m_bbox);
+        int bh          = lv_obj_get_height(m_bbox);
+        m_bbox_center_x = bx + bw / 2;
+        m_bbox_center_y = by + bh / 2;
+
+        m_bbox_center_x = bx + bw / 2;
+        m_bbox_center_y = by + bh / 2;
+
+        // 新增：记录按下时矩形中心和尺寸，用于边拖动
+        m_press_center_x = (float)(bx + bw / 2);
+        m_press_center_y = (float)(by + bh / 2);
+        m_press_w        = bw;
+        m_press_h        = bh;
     }
 
     void mouse_move(lv_point_t point) {
-        std::println("mouse_move: ({}, {})", point.x, point.y);
-        if (m_is_draging)
+        if (!m_is_draging)
+            return;
+
+        anchor_mask_t mask = get_current_anchor_mask();
+
+        if (mask == ANCHOR_ROTATE) {
+            update_rotation(point);
+        } else {
             update_pos(point);
+        }
     }
 
-    void mouse_release(lv_point_t point) {
-        std::println("mouse_release: ({}, {})", point.x, point.y);
-        m_is_draging = false;
-    }
+    void mouse_release(lv_point_t point) { m_is_draging = false; }
 
     void dispatch_event(lv_event_t* e) { m_current_target = (lv_obj_t*)lv_event_get_target(e); }
 
-    void on_rotate(lv_event_t* e) {
-        m_item->rotate(45);
+    void update_rotation(lv_point_t point) {
+        if (m_item == nullptr)
+            return;
+
+        // angle from center to press point
+        float a0 = atan2f((float)(m_press_point.y - m_bbox_center_y), (float)(m_press_point.x - m_bbox_center_x));
+        // angle from center to current point
+        float a1        = atan2f((float)(point.y - m_bbox_center_y), (float)(point.x - m_bbox_center_x));
+
+        float delta_deg = (a1 - a0) * 180.0f / (float)M_PI;
+        m_item->set_rotation(m_drag_start_deg + delta_deg);
         m_item->m_transform.apply(m_bbox);
-        std::println("clicked rot");
     }
 
     void update_pos(lv_point_t point) {
@@ -549,63 +493,134 @@ public:
 
         int dx             = point.x - m_press_point.x;
         int dy             = point.y - m_press_point.y;
-
         anchor_mask_t mask = get_current_anchor_mask();
-        lv_area_t s        = solve_rect(m_aabb, mask, dx, dy);
-        sync_bbox(s);
+        float deg          = m_item->m_transform.deg;
+
+        // 无旋转时走原有逻辑
+        if (deg == 0.f) {
+            lv_area_t s = solve_rect(m_aabb, mask, dx, dy);
+            sync_bbox(s);
+            return;
+        }
+
+        float rad = deg * (float)M_PI / 180.0f;
+        float cs  = cosf(rad);  // 局部 x 轴方向 cos
+        float sn  = sinf(rad);  // 局部 x 轴方向 sin
+
+        // 局部 x 轴方向向量 ex = (cs,  sn)
+        // 局部 y 轴方向向量 ey = (-sn, cs)
+
+        // Step 1: 鼠标增量投影到局部两轴
+        float delta_x = (float)dx * cs + (float)dy * sn;   // 沿局部 x 轴（lm/rm 方向）
+        float delta_y = -(float)dx * sn + (float)dy * cs;  // 沿局部 y 轴（tm/bm 方向）
+
+        // Step 2 & 3: 根据 anchor_mask 计算新宽高，以及中心沿局部轴的偏移
+        float new_w          = (float)m_press_w;
+        float new_h          = (float)m_press_h;
+        float center_shift_x = 0.f;  // 中心沿局部 x 轴偏移
+        float center_shift_y = 0.f;  // 中心沿局部 y 轴偏移
+
+        if (mask == ANCHOR_CENTER) {
+            // 整体移动：直接偏移世界坐标，走原有逻辑
+            lv_area_t s = solve_rect(m_aabb, mask, dx, dy);
+            sync_bbox(s);
+            return;
+        }
+
+        // lm 边（DA）：lm 向 rm 方向移动 delta_x，rm 固定
+        if (mask & ANCHOR_LEFT) {
+            new_w -= delta_x;
+            center_shift_x += delta_x / 2.f;
+        }
+        // rm 边（BC）：rm 向右移动 delta_x，lm 固定
+        if (mask & ANCHOR_RIGHT) {
+            new_w += delta_x;
+            center_shift_x += delta_x / 2.f;
+        }
+        // tm 边（AB）：tm 向 bm 方向移动 delta_y，bm 固定
+        if (mask & ANCHOR_TOP) {
+            new_h -= delta_y;
+            center_shift_y += delta_y / 2.f;
+        }
+        // bm 边（CD）：bm 向下移动 delta_y，tm 固定
+        if (mask & ANCHOR_BOTTOM) {
+            new_h += delta_y;
+            center_shift_y += delta_y / 2.f;
+        }
+
+        // 最小尺寸保护
+        if (new_w < 1.f)
+            new_w = 1.f;
+        if (new_h < 1.f)
+            new_h = 1.f;
+
+        // Step 3: 局部轴偏移转回世界坐标偏移
+        // ex = (cs, sn), ey = (-sn, cs)
+        float world_shift_x = center_shift_x * cs - center_shift_y * sn;
+        float world_shift_y = center_shift_x * sn + center_shift_y * cs;
+
+        // Step 4: 求新中心 O'（世界坐标）
+        float new_cx = m_press_center_x + world_shift_x;
+        float new_cy = m_press_center_y + world_shift_y;
+
+        // Step 4: 由新中心反推新矩形左上角（轴对齐坐标，即逆旋转后的 x,y）
+        int new_x = (int)(new_cx - new_w / 2.f);
+        int new_y = (int)(new_cy - new_h / 2.f);
+
+        // 同步 bbox 和 item，再施加原旋转变换
+        lv_obj_set_pos(m_bbox, new_x, new_y);
+        lv_obj_set_size(m_bbox, (int)new_w, (int)new_h);
+
+        lv_obj_set_pos(m_item->to_object(), new_x, new_y);
+        lv_obj_set_size(m_item->to_object(), (int)new_w, (int)new_h);
+
+        lv_obj_update_layout(m_bbox);
+        
+        m_item->m_transform.apply(m_bbox);
+        m_item->m_transform.apply(m_item->to_object());
     }
 
     anchor_mask_t get_current_anchor_mask() {
-        anchor_mask_t mask;
+        if (m_current_target == m_rot)
+            return ANCHOR_ROTATE;
         if (m_current_target == m_tm)
-            mask = ANCHOR_TOP;
-        else if (m_current_target == m_bm)
-            mask = ANCHOR_BOTTOM;
-        else if (m_current_target == m_lm)
-            mask = ANCHOR_LEFT;
-        else if (m_current_target == m_rm)
-            mask = ANCHOR_RIGHT;
-        else if (m_current_target == m_tl)
-            mask = ANCHOR_TOP_LEFT;
-        else if (m_current_target == m_tr)
-            mask = ANCHOR_TOP_RIGHT;
-        else if (m_current_target == m_bl)
-            mask = ANCHOR_BOTTOM_LEFT;
-        else if (m_current_target == m_br)
-            mask = ANCHOR_BOTTOM_RIGHT;
-        else
-            mask = ANCHOR_CENTER;
-
-        return mask;
+            return ANCHOR_TOP;
+        if (m_current_target == m_bm)
+            return ANCHOR_BOTTOM;
+        if (m_current_target == m_lm)
+            return ANCHOR_LEFT;
+        if (m_current_target == m_rm)
+            return ANCHOR_RIGHT;
+        if (m_current_target == m_tl)
+            return ANCHOR_TOP_LEFT;
+        if (m_current_target == m_tr)
+            return ANCHOR_TOP_RIGHT;
+        if (m_current_target == m_bl)
+            return ANCHOR_BOTTOM_LEFT;
+        if (m_current_target == m_br)
+            return ANCHOR_BOTTOM_RIGHT;
+        return ANCHOR_CENTER;
     }
 
     void sync_bbox(lv_area_t rect) {
         lv_obj_set_pos(m_bbox, rect.x1, rect.y1);
         lv_obj_set_size(m_bbox, rect.x2 - rect.x1, rect.y2 - rect.y1);
-
         lv_obj_update_layout(m_bbox);
         lv_obj_set_pos(m_item->to_object(), lv_obj_get_x(m_bbox), lv_obj_get_y(m_bbox));
         lv_obj_set_size(m_item->to_object(), lv_obj_get_width(m_bbox), lv_obj_get_height(m_bbox));
     }
 
     lv_area_t get_aabb(lv_obj_t* object) {
-        int x  = lv_obj_get_x(object);
-        int y  = lv_obj_get_y(object);
-        int x2 = lv_obj_get_x2(object);
-        int y2 = lv_obj_get_y2(object);
-
-        return {x, y, x2, y2};
+        return {lv_obj_get_x(object), lv_obj_get_y(object), lv_obj_get_x2(object), lv_obj_get_y2(object)};
     }
 
     bool contains(lv_obj_t* obj) {
         if (m_bbox == obj)
             return true;
-
         for (auto const& [key, value] : m_handles) {
             if (value.obj == obj)
                 return true;
         }
-
         return false;
     }
 
@@ -622,7 +637,6 @@ public:
     lv_obj_t* m_bl         = nullptr;
     lv_obj_t* m_br         = nullptr;
     lv_obj_t* m_rot        = nullptr;
-
     lv_obj_t* m_tm         = nullptr;
     lv_obj_t* m_bm         = nullptr;
     lv_obj_t* m_lm         = nullptr;
@@ -634,10 +648,19 @@ public:
     lv_point_t m_press_point;
     bool m_is_draging = false;
     lv_area_t m_aabb;
+
+    // rotation drag state
+    float m_drag_start_deg = 0.f;
+    int m_bbox_center_x    = 0;
+    int m_bbox_center_y    = 0;
+
+    float m_press_center_x = 0.f;  // 按下时 bbox 中心世界坐标 x
+    float m_press_center_y = 0.f;  // 按下时 bbox 中心世界坐标 y
+    int m_press_w          = 0;    // 按下时宽度
+    int m_press_h          = 0;    // 按下时高度
 };
 
 class LVGraphicsScene
-
 {
 public:
     LVGraphicsScene(lv_obj_t* parent) {
@@ -648,7 +671,6 @@ public:
         lv_obj_set_style_radius(m_obj, 0, 0);
         lv_obj_set_style_pad_all(m_obj, 0, 0);
         lv_obj_set_style_margin_all(m_obj, 0, 0);
-
         lv_obj_set_style_border_color(m_obj, lv_color_make(0, 255, 0), 0);
         lv_obj_set_style_border_width(m_obj, 1, 0);
     }
@@ -656,11 +678,9 @@ public:
     void mouse_press(lv_event_t* e, lv_point_t point) {
         lv_obj_t* active = lv_indev_get_active_obj();
         auto [ok, item]  = contains(active);
-
         if (!m_interact_gizmos->contains(active)) {
             m_interact_gizmos->selected(ok ? item : nullptr);
         }
-
         m_interact_gizmos->mouse_press(point);
     }
 
@@ -714,7 +734,6 @@ public:
         lv_obj_set_style_radius(m_obj, 0, 0);
         lv_obj_set_style_pad_all(m_obj, 0, 0);
         lv_obj_set_style_margin_all(m_obj, 0, 0);
-
         lv_obj_set_style_border_color(m_obj, lv_color_make(255, 0, 0), 0);
         lv_obj_set_style_border_width(m_obj, 1, 0);
 
@@ -723,12 +742,10 @@ public:
             [](lv_event_t* e)
             {
                 lv_event_code_t code = lv_event_get_code(e);
-
                 if (!(code == LV_EVENT_PRESSED || code == LV_EVENT_RELEASED || code == LV_EVENT_PRESSING))
                     return;
 
                 LVGraphicsView* view = (LVGraphicsView*)lv_event_get_user_data(e);
-
                 lv_indev_t* indev    = lv_indev_active();
                 if (indev == nullptr)
                     return;
@@ -736,13 +753,12 @@ public:
                 lv_point_t point;
                 lv_indev_get_point(indev, &point);
 
-                if (code == LV_EVENT_PRESSED) {
+                if (code == LV_EVENT_PRESSED)
                     view->mouse_press(e, point);
-                } else if (code == LV_EVENT_RELEASED) {
+                else if (code == LV_EVENT_RELEASED)
                     view->mouse_release(e, point);
-                } else if (code == LV_EVENT_PRESSING) {
+                else if (code == LV_EVENT_PRESSING)
                     view->mouse_move(e, point);
-                }
             },
             LV_EVENT_ALL,
             this);
@@ -779,10 +795,10 @@ void CreateLVGraphics() {
     auto scene     = new LVGraphicsScene(view->to_object());
     view->set_scene(scene);
 
-    LVGraphicsInteractGizmos* interact_gizmos = new LVGraphicsInteractGizmos(view->to_object());
+    auto interact_gizmos = new LVGraphicsInteractGizmos(view->to_object());
     scene->set_interact_gizmos(interact_gizmos);
 
-    LVGraphicsPropertyPanel* property_panel = new LVGraphicsPropertyPanel(view->to_object());
+    auto property_panel = new LVGraphicsPropertyPanel(view->to_object());
     scene->set_property_panel(property_panel);
     lv_obj_align(property_panel->to_object(), LV_ALIGN_RIGHT_MID, -16, 16);
 
