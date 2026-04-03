@@ -496,86 +496,87 @@ public:
         anchor_mask_t mask = get_current_anchor_mask();
         float deg          = m_item->m_transform.deg;
 
-        // 无旋转时走原有逻辑
-        if (deg == 0.f) {
+        // 无旋转 或 整体移动：走原有逻辑
+        if (deg == 0.f || mask == ANCHOR_CENTER) {
             lv_area_t s = solve_rect(m_aabb, mask, dx, dy);
             sync_bbox(s);
             return;
         }
 
         float rad = deg * (float)M_PI / 180.0f;
-        float cs  = cosf(rad);  // 局部 x 轴方向 cos
-        float sn  = sinf(rad);  // 局部 x 轴方向 sin
-
-        // 局部 x 轴方向向量 ex = (cs,  sn)
-        // 局部 y 轴方向向量 ey = (-sn, cs)
+        float cs  = cosf(rad);
+        float sn  = sinf(rad);
 
         // Step 1: 鼠标增量投影到局部两轴
-        float delta_x = (float)dx * cs + (float)dy * sn;   // 沿局部 x 轴（lm/rm 方向）
-        float delta_y = -(float)dx * sn + (float)dy * cs;  // 沿局部 y 轴（tm/bm 方向）
+        // δ₁ = ΔP · e₁，δ₂ = ΔP · e₂
+        float delta1 = (float)dx * cs + (float)dy * sn;
+        float delta2 = -(float)dx * sn + (float)dy * cs;
 
-        // Step 2 & 3: 根据 anchor_mask 计算新宽高，以及中心沿局部轴的偏移
-        float new_w          = (float)m_press_w;
-        float new_h          = (float)m_press_h;
-        float center_shift_x = 0.f;  // 中心沿局部 x 轴偏移
-        float center_shift_y = 0.f;  // 中心沿局部 y 轴偏移
+        // Step 2: 根据 anchor_mask 计算原始新宽高
+        float new_w = (float)m_press_w;
+        float new_h = (float)m_press_h;
 
-        if (mask == ANCHOR_CENTER) {
-            // 整体移动：直接偏移世界坐标，走原有逻辑
-            lv_area_t s = solve_rect(m_aabb, mask, dx, dy);
-            sync_bbox(s);
-            return;
-        }
+        if (mask & ANCHOR_LEFT)
+            new_w -= delta1;  // 拖动 AD 边，BC 固定
+        if (mask & ANCHOR_RIGHT)
+            new_w += delta1;  // 拖动 BC 边，AD 固定
+        if (mask & ANCHOR_TOP)
+            new_h -= delta2;  // 拖动 AB 边，CD 固定
+        if (mask & ANCHOR_BOTTOM)
+            new_h += delta2;  // 拖动 CD 边，AB 固定
 
-        // lm 边（DA）：lm 向 rm 方向移动 delta_x，rm 固定
+        // Step 3: 钳位，并反推实际生效的局部分量 δ₁*、δ₂*
+        // 钳位后：δ₁* = W - W'（对 LEFT/RIGHT 对称符号相同）
+        //         δ₂* = H - H'（对 TOP/BOTTOM 对称符号相同）
+        float clamped_w = (new_w < 1.f) ? 1.f : new_w;
+        float clamped_h = (new_h < 1.f) ? 1.f : new_h;
+
+        // 实际生效的尺寸变化量（始终为正或零）
+        float actual_dw = (float)m_press_w - clamped_w;  // W - W'
+        float actual_dh = (float)m_press_h - clamped_h;  // H - H'
+
+        // Step 4: 用实际生效量计算中心偏移，避免固定边漂移
+        // 中心偏移 = δ*/2，方向与对应边的操作方向一致
+        float center_shift1 = 0.f;  // 沿 e₁ 轴
+        float center_shift2 = 0.f;  // 沿 e₂ 轴
+
         if (mask & ANCHOR_LEFT) {
-            new_w -= delta_x;
-            center_shift_x += delta_x / 2.f;
+            // AD 边向 BC 方向移动，中心沿 e₁ 正方向偏移 δ₁*/2
+            center_shift1 += actual_dw / 2.f;
         }
-        // rm 边（BC）：rm 向右移动 delta_x，lm 固定
         if (mask & ANCHOR_RIGHT) {
-            new_w += delta_x;
-            center_shift_x += delta_x / 2.f;
+            // BC 边向远离 AD 方向移动，中心沿 e₁ 正方向偏移 δ₁*/2
+            // actual_dw = W - W'，W' 增大时 actual_dw 为负，符号自洽
+            center_shift1 -= actual_dw / 2.f;
         }
-        // tm 边（AB）：tm 向 bm 方向移动 delta_y，bm 固定
         if (mask & ANCHOR_TOP) {
-            new_h -= delta_y;
-            center_shift_y += delta_y / 2.f;
+            center_shift2 += actual_dh / 2.f;
         }
-        // bm 边（CD）：bm 向下移动 delta_y，tm 固定
         if (mask & ANCHOR_BOTTOM) {
-            new_h += delta_y;
-            center_shift_y += delta_y / 2.f;
+            center_shift2 -= actual_dh / 2.f;
         }
 
-        // 最小尺寸保护
-        if (new_w < 1.f)
-            new_w = 1.f;
-        if (new_h < 1.f)
-            new_h = 1.f;
+        // Step 5: 局部偏移转回世界坐标
+        // O' = O + Δξ·e₁ + Δη·e₂
+        float world_shift_x = center_shift1 * cs - center_shift2 * sn;
+        float world_shift_y = center_shift1 * sn + center_shift2 * cs;
 
-        // Step 3: 局部轴偏移转回世界坐标偏移
-        // ex = (cs, sn), ey = (-sn, cs)
-        float world_shift_x = center_shift_x * cs - center_shift_y * sn;
-        float world_shift_y = center_shift_x * sn + center_shift_y * cs;
+        float new_cx        = m_press_center_x + world_shift_x;
+        float new_cy        = m_press_center_y + world_shift_y;
 
-        // Step 4: 求新中心 O'（世界坐标）
-        float new_cx = m_press_center_x + world_shift_x;
-        float new_cy = m_press_center_y + world_shift_y;
+        // Step 6: 由 O' 反推轴对齐左上角坐标
+        int new_x = (int)(new_cx - clamped_w / 2.f);
+        int new_y = (int)(new_cy - clamped_h / 2.f);
 
-        // Step 4: 由新中心反推新矩形左上角（轴对齐坐标，即逆旋转后的 x,y）
-        int new_x = (int)(new_cx - new_w / 2.f);
-        int new_y = (int)(new_cy - new_h / 2.f);
-
-        // 同步 bbox 和 item，再施加原旋转变换
+        // 同步 bbox 和 item，施加旋转变换
         lv_obj_set_pos(m_bbox, new_x, new_y);
-        lv_obj_set_size(m_bbox, (int)new_w, (int)new_h);
+        lv_obj_set_size(m_bbox, (int)clamped_w, (int)clamped_h);
 
         lv_obj_set_pos(m_item->to_object(), new_x, new_y);
-        lv_obj_set_size(m_item->to_object(), (int)new_w, (int)new_h);
+        lv_obj_set_size(m_item->to_object(), (int)clamped_w, (int)clamped_h);
 
         lv_obj_update_layout(m_bbox);
-        
+
         m_item->m_transform.apply(m_bbox);
         m_item->m_transform.apply(m_item->to_object());
     }
