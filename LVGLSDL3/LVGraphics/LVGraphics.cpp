@@ -446,10 +446,7 @@ public:
         m_bbox_center_x = bx + bw / 2;
         m_bbox_center_y = by + bh / 2;
 
-        m_bbox_center_x = bx + bw / 2;
-        m_bbox_center_y = by + bh / 2;
-
-        // 新增：记录按下时矩形中心和尺寸，用于边拖动
+           // 新增：记录按下时矩形中心和尺寸，用于边拖动
         m_press_center_x = (float)(bx + bw / 2);
         m_press_center_y = (float)(by + bh / 2);
         m_press_w        = bw;
