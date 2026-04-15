@@ -1,9 +1,41 @@
 add_executable(LVGLSDL3
     main.cpp
     main.h
-        LVGraphics/LVGraphics.cpp
-        LVGraphics/LVGraphics.h
 )
+
+option(BUILD_GRAPHICS_V1_DEMOS "Enable building demos for Graphics V1" OFF)
+option(BUILD_GRAPHICS_V2_DEMOS "Enable building demos for Graphics V2" OFF)
+
+# test
+set(BUILD_GRAPHICS_V1_DEMOS ON CACHE BOOL "" FORCE)
+set(BUILD_GRAPHICS_V2_DEMOS OFF CACHE BOOL "" FORCE)
+
+if(BUILD_GRAPHICS_V1_DEMOS)
+    target_sources(LVGLSDL3
+        PRIVATE
+            demos/graphics/v1/Graphics.cpp
+    )
+    target_compile_definitions(LVGLSDL3
+        PRIVATE ENABLE_GRAPHICS_V1_DEMOS
+    ) 
+    target_include_directories(LVGLSDL3
+        PRIVATE demos/graphics/v1
+    )
+endif()
+
+if(BUILD_GRAPHICS_V2_DEMOS)
+    target_sources(LVGLSDL3
+        PRIVATE
+            demos/graphics/v2/demo1.cpp
+            demos/graphics/v2/demo2.cpp
+    )
+    target_compile_definitions(LVGLSDL3
+        PRIVATE ENABLE_GRAPHICS_V2_DEMOS
+    )
+    target_include_directories(LVGLSDL3
+        PRIVATE demos/graphics/v2
+    )
+endif()
 
 set_target_properties(LVGLSDL3 PROPERTIES
 #    MACOSX_BUNDLE_GUI_IDENTIFIER com.example.LVGLSDL3

@@ -2,7 +2,7 @@
 #include <SDL3/SDL.h>
 #include <print>
 
-#include "LVGraphics/LVGraphics.h"
+#include "Graphics.h"
 
 template <typename F>
 static lv_obj_t* create_button(lv_obj_t* parent, char const* text, F f, void* user_data) {
@@ -19,7 +19,7 @@ static lv_obj_t* create_button(lv_obj_t* parent, char const* text, F f, void* us
 int main(int argc, char* argv[]) {
     LVGLSDL3 sdl(1024, 600);
 
-    CreateLVGraphics();
+    graphics::v1::create_graphics_demo();
 
     lv_obj_t* close_btn = create_button(
         lv_layer_top(),
@@ -30,9 +30,8 @@ int main(int argc, char* argv[]) {
             lvgl_sdl3->stop();
         },
         &sdl);
-    lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, -6, 6);
 
-    CreateLVGraphics();
+    lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, -6, 6);
 
     sdl.run();
     return 0;
