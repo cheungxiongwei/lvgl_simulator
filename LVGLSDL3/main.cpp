@@ -16,10 +16,18 @@ static lv_obj_t* create_button(lv_obj_t* parent, char const* text, F f, void* us
     return btn;
 }
 
+#ifdef ENABLE_GRAPHICS_V1_DEMOS
+using namespace graphics::v1;
+#endif
+
+#ifdef ENABLE_GRAPHICS_V2_DEMOS
+using namespace graphics::v2;
+#endif
+
 int main(int argc, char* argv[]) {
     LVGLSDL3 sdl(1024, 600);
 
-    graphics::v1::create_graphics_demo();
+    create_graphics_demo();
 
     lv_obj_t* close_btn = create_button(
         lv_layer_top(),
