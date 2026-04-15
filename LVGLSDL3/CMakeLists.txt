@@ -3,12 +3,18 @@ add_executable(LVGLSDL3
     main.h
 )
 
+# Graphics demo selection switches.
+# WARNING: These options are mutually exclusive in normal usage.
+# Enable only one Graphics version to avoid conflicting demo builds.
+
 option(BUILD_GRAPHICS_V1_DEMOS "Enable building demos for Graphics V1" OFF)
 option(BUILD_GRAPHICS_V2_DEMOS "Enable building demos for Graphics V2" OFF)
+option(BUILD_GRAPHICS_V3_DEMOS "Enable building demos for Graphics V3" OFF)
 
 # test
 set(BUILD_GRAPHICS_V1_DEMOS OFF CACHE BOOL "" FORCE)
 set(BUILD_GRAPHICS_V2_DEMOS ON CACHE BOOL "" FORCE)
+set(BUILD_GRAPHICS_V3_DEMOS OFF CACHE BOOL "" FORCE)
 
 if(BUILD_GRAPHICS_V1_DEMOS)
     target_sources(LVGLSDL3
@@ -33,6 +39,19 @@ if(BUILD_GRAPHICS_V2_DEMOS)
     )
     target_include_directories(LVGLSDL3
         PRIVATE demos/graphics/v2/include demos/graphics/v2/src demos/graphics/v1/src
+    )
+endif()
+
+if(BUILD_GRAPHICS_V3_DEMOS)
+    target_sources(LVGLSDL3
+        PRIVATE
+            demos/graphics/v3/src/Graphics.cpp
+    )
+    target_compile_definitions(LVGLSDL3
+        PRIVATE ENABLE_GRAPHICS_V3_DEMOS
+    )
+    target_include_directories(LVGLSDL3
+        PRIVATE demos/graphics/v3/include
     )
 endif()
 

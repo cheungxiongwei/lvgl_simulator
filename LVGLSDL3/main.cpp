@@ -24,6 +24,10 @@ using namespace graphics::v1;
 using namespace graphics::v2;
 #endif
 
+#ifdef ENABLE_GRAPHICS_V3_DEMOS
+using namespace graphics::v3;
+#endif
+
 int main(int argc, char* argv[]) {
     LVGLSDL3 sdl(1024, 600);
 
