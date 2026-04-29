@@ -13,8 +13,8 @@ option(BUILD_GRAPHICS_V3_DEMOS "Enable building demos for Graphics V3" OFF)
 
 # test
 set(BUILD_GRAPHICS_V1_DEMOS OFF CACHE BOOL "" FORCE)
-set(BUILD_GRAPHICS_V2_DEMOS ON CACHE BOOL "" FORCE)
-set(BUILD_GRAPHICS_V3_DEMOS OFF CACHE BOOL "" FORCE)
+set(BUILD_GRAPHICS_V2_DEMOS OFF CACHE BOOL "" FORCE)
+set(BUILD_GRAPHICS_V3_DEMOS ON CACHE BOOL "" FORCE)
 
 if(BUILD_GRAPHICS_V1_DEMOS)
     target_sources(LVGLSDL3
@@ -47,12 +47,15 @@ if(BUILD_GRAPHICS_V3_DEMOS)
         PRIVATE
             demos/graphics/v3/src/Graphics.cpp
     )
-    target_compile_definitions(LVGLSDL3
-        PRIVATE ENABLE_GRAPHICS_V3_DEMOS
+    target_compile_definitions(LVGLSDL3 PRIVATE 
+        ENABLE_GRAPHICS_V3_DEMOS
     )
     target_include_directories(LVGLSDL3
         PRIVATE demos/graphics/v3/include
     )
+
+    # Required
+    # config lv_conf.h LV_USE_SVG=1 
 endif()
 
 set_target_properties(LVGLSDL3 PROPERTIES
