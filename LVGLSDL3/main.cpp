@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
 
     lv_obj_t* close_btn = create_button(
         lv_layer_top(),
-        "Close",
+        "X",
         [](auto e)
         {
             LVGLSDL3* lvgl_sdl3 = (LVGLSDL3*)lv_event_get_user_data(e);
@@ -43,6 +43,9 @@ int main(int argc, char* argv[]) {
         },
         &sdl);
 
+    lv_obj_set_size(close_btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_radius(close_btn, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(close_btn, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
     lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, -6, 6);
 
     sdl.run();

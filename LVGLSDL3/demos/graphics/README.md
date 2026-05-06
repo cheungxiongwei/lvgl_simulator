@@ -1,7 +1,7 @@
 docs
 v1 采用 lvgl widget 方式绘制
 v2 采用 lvlg 自定义绘制事件方式绘制
-v3 采用 vector_graphic 矢量图像绘制
+v3 采用 vector_graphic 矢量图像绘制，图层Z序需要排序绘制对象。
 
 核心变换矩阵
 ```cpp

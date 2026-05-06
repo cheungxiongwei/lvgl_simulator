@@ -299,10 +299,18 @@ private:
 class VectorPainter
 {
 public:
-    explicit VectorPainter(lv_layer_t* layer) { context = lv_draw_vector_dsc_create(layer); }
+    explicit VectorPainter(lv_layer_t* layer) : layer(layer) { context = lv_draw_vector_dsc_create(layer); }
 
     ~VectorPainter() {
         lv_draw_vector(context);
+
+        for (auto& [current_layer, area] : other_layer) {
+            lv_draw_image_dsc_t image_draw_dsc;
+            lv_draw_image_dsc_init(&image_draw_dsc);
+            image_draw_dsc.src        = current_layer;
+            image_draw_dsc.blend_mode = LV_BLEND_MODE_NORMAL;
+            lv_draw_layer(this->layer, &image_draw_dsc, &area);
+        }
         lv_draw_vector_dsc_delete(context);
     }
 
@@ -446,30 +454,47 @@ public:
         lv_draw_vector_dsc_add_path(context, path.path);
     }
 
-    /* can not work,use layer lv_draw_image */
-    void add_image(lv_draw_image_dsc_t const* img_dsc) {
-        lv_vector_path_t* path = lv_vector_path_create(LV_VECTOR_PATH_QUALITY_MEDIUM);
+    void add_image(int32_t x, int32_t y, std::string const& file) {
+        lv_image_decoder_t* decoder = lv_image_decoder_create();
 
-        lv_fpoint_t start      = {0, 0};
-        lv_fpoint_t width      = {img_dsc->header.w, 0};
-        lv_fpoint_t size       = {img_dsc->header.w, img_dsc->header.h};
-        lv_fpoint_t height     = {0, img_dsc->header.h};
+        lv_image_header_t header;
+        lv_result_t res = lv_image_decoder_get_info(file.c_str(), &header);
+        if (res == LV_RES_OK) {
+            lv_draw_image_dsc_t dsc;
+            lv_draw_image_dsc_init(&dsc);
+            dsc.src = file.c_str();
+            lv_area_t area;
+            area.x1               = x;
+            area.x2               = area.x1 + header.w;
+            area.y1               = y;
+            area.y2               = area.y1 + header.h;
 
-        lv_vector_path_move_to(path, &start);
-        lv_vector_path_line_to(path, &width);
-        lv_vector_path_line_to(path, &size);
-        lv_vector_path_line_to(path, &height);
-        lv_vector_path_close(path);
-
-        lv_draw_vector_dsc_set_fill_image(context, img_dsc);
-
-        lv_draw_vector_dsc_add_path(context, path);
-        lv_draw_vector_dsc_set_fill_color(context, lv_color_make(0, 255, 0));
+            lv_layer_t* new_layer = lv_draw_layer_create(this->layer, LV_COLOR_FORMAT_NATIVE_WITH_ALPHA, &area);
+            if (new_layer) {
+                lv_draw_image(new_layer, &dsc, &area);
+                other_layer.emplace_back(new_layer, area);
+            }
+        }
+        lv_image_decoder_delete(decoder);
     }
 
-    void add_text(std::string const& text) {
-        //
-        // lv_draw_label
+    void add_text(int32_t x, int32_t y, char const* text) {
+        lv_draw_label_dsc_t dsc;
+        lv_draw_label_dsc_init(&dsc);
+        dsc.color = lv_color_hex(0x00ff00);
+        dsc.text  = text;
+
+        lv_point_t size_res;
+        auto font = lv_font_get_default();
+        lv_text_get_size(&size_res, text, font, 1, 1, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+
+        lv_area_t area        = {x, y, x + size_res.x, y + size_res.y};
+
+        lv_layer_t* new_layer = lv_draw_layer_create(this->layer, LV_COLOR_FORMAT_NATIVE_WITH_ALPHA, &area);
+        if (new_layer) {
+            lv_draw_label(new_layer, &dsc, &area);
+            other_layer.emplace_back(new_layer, area);
+        }
     }
 
     void set_stroke_width(float width) { style.stroke.width = width; }
@@ -546,10 +571,13 @@ private:
         lv_draw_vector_dsc_set_fill_opa(context, style.fill.opa);
     }
 private:
+    lv_layer_t* layer{nullptr};
     lv_draw_vector_dsc_t* context;
     Style style;
     std::stack<Style> style_state;
     VectorPath draft;
+
+    std::vector<std::pair<lv_layer_t*, lv_area_t>> other_layer;
 };
 
 struct Layer {
@@ -1560,6 +1588,15 @@ public:
                 }
             }
         }
+
+        auto x  = lv_obj_get_x(m_canvas);
+        auto y  = lv_obj_get_y(m_canvas);
+        auto ox = x + (int32_t)m_offset.x;
+        auto oy = y + (int32_t)m_offset.y;
+
+        painter->add_image(ox, oy, R"(Z:\your_image_path.png)");
+        painter->add_text(ox + 100, oy + 88, "cheungxiongwei");
+        painter->add_image(ox, oy + 44, R"(Z:C:\your_image_path.png)");
     }
 
     void requestPaint() {
