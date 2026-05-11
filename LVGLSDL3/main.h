@@ -63,11 +63,7 @@ public:
         }
 
         // Create texture for LVGL rendering
-        m_texture = SDL_CreateTexture(m_renderer,
-                                      SDL_PIXELFORMAT_BGRA32,
-                                      SDL_TEXTUREACCESS_STREAMING,
-                                      m_logical_width,
-                                      m_logical_height);
+        m_texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, m_logical_width, m_logical_height);
         if (!m_texture) {
             std::cerr << "SDL_CreateTexture Error: " << SDL_GetError() << std::endl;
             SDL_DestroyRenderer(m_renderer);
@@ -104,8 +100,7 @@ public:
                                     auto self = static_cast<LVGLSDL3*>(lv_display_get_user_data(disp));
 
                                     // Update the texture with the rendered content
-                                    uint32_t stride =
-                                        lv_draw_buf_width_to_stride(self->m_logical_width, LV_COLOR_FORMAT_NATIVE);
+                                    uint32_t stride = lv_draw_buf_width_to_stride(self->m_logical_width, LV_COLOR_FORMAT_NATIVE);
                                     SDL_UpdateTexture(self->m_texture, nullptr, px_map, stride);
 
                                     // Render the texture to screen
@@ -195,6 +190,8 @@ public:
             //     SDL_DelayPrecise(SDL_MS_TO_NS(remaining));
             // }
         }
+
+        lv_deinit();
     }
 
     void stop() { m_quit = true; }
